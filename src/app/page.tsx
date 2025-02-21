@@ -5,7 +5,7 @@ import { toast } from "sonner"
 
 
 import { useState, useEffect } from "react";
-import { Bot, Send, User, Loader2, Check, ChevronsUpDown } from "lucide-react";
+import { Send, Loader2, Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -36,40 +36,6 @@ interface MessageActionsProps {
   onTranslate: (language: string) => void;
 }
 
-// Common English words for more accurate language detection
-const COMMON_ENGLISH_WORDS = new Set([
-  "the",
-  "be",
-  "to",
-  "of",
-  "and",
-  "a",
-  "in",
-  "that",
-  "have",
-  "i",
-  "it",
-  "for",
-  "not",
-  "on",
-  "with",
-  "he",
-  "as",
-  "you",
-  "do",
-  "at",
-  "this",
-  "but",
-  "his",
-  "by",
-  "from",
-  "they",
-  "we",
-  "say",
-  "her",
-  "she",
-]);
-
 const LANGUAGES = [
   { value: "es", label: "Spanish" },
   { value: "fr", label: "French" },
@@ -82,17 +48,6 @@ const LANGUAGES = [
   { value: "ko", label: "Korean" },
 ];
 
-// Mock responses for different actions
-const mockResponses = {
-  summarize: (text: string) => {
-    const firstSentence = text.split(".")[0];
-    return `Summary: ${firstSentence}. This is the main point of the message.`;
-  },
-  translate: (text: string, language: string) => {
-    const languageName = LANGUAGES.find((l) => l.value === language)?.label;
-    return `${languageName} translation: ${text} (${language})`;
-  },
-};
 
 function MessageActions({
   content,
@@ -106,40 +61,45 @@ function MessageActions({
 
   useEffect(() => {
     setIsChecking(true);
-
     const detectLanguage = async () => {
-      const languageDetectorCapabilities = await self.ai.languageDetector.capabilities();
-      const canDetect = languageDetectorCapabilities.capabilities;
-      let detector;
-      if (canDetect === 'no') {
-        // The language detector isn't usable.
-        toast("The language detector isn't usable")
-        return;
-      }
-      if (canDetect === 'readily') {
-        // The language detector can immediately be used.
-        detector = await self.ai.languageDetector.create();
-      } else {
-        // The language detector can be used after model download.
-        detector = await self.ai.languageDetector.create({
-          monitor(m: { addEventListener: (arg0: string, arg1: (e: any) => void) => void; }) {
-            m.addEventListener('downloadprogress', (e) => {
-              console.log(`Downloaded ${e.loaded} of ${e.total} bytes.`);
-            });
-          },
-        });
-        await detector.ready;
-      }
-      const someUserText = 'Hallo und herzlich willkommen!';
-      const results = await detector.detect(content);
-      const languageResult = results[0].detectedLanguage
-      if (languageResult === "en") {
-        setIsEnglish(true)
+      try {
+        const languageDetectorCapabilities = await self.ai.languageDetector.capabilities();
+        const canDetect = languageDetectorCapabilities.capabilities;
+        let detector;
+        if (canDetect === 'no') {
+          // The language detector isn't usable.
+          toast("The language detector isn't usable")
+          return;
+        }
+        if (canDetect === 'readily') {
+          // The language detector can immediately be used.
+          detector = await self.ai.languageDetector.create();
+        } else {
+          // The language detector can be used after model download.
+          detector = await self.ai.languageDetector.create({
+            monitor(m: { addEventListener: (arg0: string, arg1: (e: any) => void) => void; }) {
+              m.addEventListener('downloadprogress', (e) => {
+                console.log(`Downloaded ${e.loaded} of ${e.total} bytes.`);
+              });
+            },
+          });
+          await detector.ready;
+        }
+        const results = await detector.detect(content);
+        const languageResult = results[0].detectedLanguage
+        if (languageResult === "en") {
+          setIsEnglish(true)
+        }
+      } catch (error) {
+        if (error instanceof Error) {
+          toast(`Error: ${error.message}`)
+        }
+      } finally {
+        setIsChecking(false)
       }
     };
 
     detectLanguage();
-    setIsChecking(false);
   }, [content]);
 
   return (
@@ -215,25 +175,6 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
-  // Simulate typing effect with setTimeout
-  const simulateTyping = (response: string) => {
-    setIsTyping(true);
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        setIsTyping(false);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now().toString(),
-            content: response,
-            role: "assistant",
-          },
-        ]);
-        resolve();
-      }, 1500);
-    });
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -251,7 +192,7 @@ export default function Chat() {
     setIsTyping(true);
     const summarizeText = async () => {
       const options = {
-        sharedContext: 'This is a scientific article',
+        sharedContext: '',
         type: 'key-points',
         format: 'markdown',
         length: 'medium',
@@ -279,6 +220,7 @@ export default function Chat() {
         } catch (error) {
           if (error instanceof Error) {
             toast(`Error: ${error.message}`)
+            setIsTyping(false)
           }
         }
       }
@@ -299,8 +241,35 @@ export default function Chat() {
   };
 
   const handleTranslate = async (content: string, language: string) => {
-    const translation = mockResponses.translate(content, language);
-    await simulateTyping(translation);
+    setIsTyping(true)
+    try {
+      const translator = await self.ai.translator.create({
+        sourceLanguage: 'en',
+        targetLanguage: language,
+        monitor(m: { addEventListener: (arg0: string, arg1: (e: any) => void) => void; }) {
+          m.addEventListener('downloadprogress', (e) => {
+            console.log(`Downloaded ${e.loaded} of ${e.total} bytes.`);
+          });
+        },
+      });
+      const translation = await translator.translate(content);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          content: translation,
+          role: "assistant",
+        },
+      ]);
+
+    } catch (error) {
+      if (error instanceof Error) {
+        toast(`Error, ${error.message}`)
+      }
+    } finally {
+      setIsTyping(false)
+    }
+
   };
 
   return (
