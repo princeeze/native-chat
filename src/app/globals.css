@@ -104,3 +104,12 @@
 .tidot:nth-child(3) {
   -webkit-animation-delay: 400ms;
 }
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

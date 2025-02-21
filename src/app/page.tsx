@@ -1,6 +1,8 @@
 "use client";
 
 import type React from "react";
+import { toast } from "sonner"
+
 
 import { useState, useEffect } from "react";
 import { Bot, Send, User, Loader2, Check, ChevronsUpDown } from "lucide-react";
@@ -103,18 +105,41 @@ function MessageActions({
   const [selectedLanguage, setSelectedLanguage] = useState("");
 
   useEffect(() => {
-    // Detect if English
     setIsChecking(true);
-    const timer = setTimeout(() => {
-      const words = content.toLowerCase().split(/\s+/);
-      const englishWordCount = words.filter((word) =>
-        COMMON_ENGLISH_WORDS.has(word)
-      ).length;
-      setIsEnglish(englishWordCount / words.length > 0.3); // If more than 30% are English words
-      setIsChecking(false);
-    }, 1000);
 
-    return () => clearTimeout(timer);
+    const detectLanguage = async () => {
+      const languageDetectorCapabilities = await self.ai.languageDetector.capabilities();
+      const canDetect = languageDetectorCapabilities.capabilities;
+      let detector;
+      if (canDetect === 'no') {
+        // The language detector isn't usable.
+        toast("The language detector isn't usable")
+        return;
+      }
+      if (canDetect === 'readily') {
+        // The language detector can immediately be used.
+        detector = await self.ai.languageDetector.create();
+      } else {
+        // The language detector can be used after model download.
+        detector = await self.ai.languageDetector.create({
+          monitor(m: { addEventListener: (arg0: string, arg1: (e: any) => void) => void; }) {
+            m.addEventListener('downloadprogress', (e) => {
+              console.log(`Downloaded ${e.loaded} of ${e.total} bytes.`);
+            });
+          },
+        });
+        await detector.ready;
+      }
+      const someUserText = 'Hallo und herzlich willkommen!';
+      const results = await detector.detect(content);
+      const languageResult = results[0].detectedLanguage
+      if (languageResult === "en") {
+        setIsEnglish(true)
+      }
+    };
+
+    detectLanguage();
+    setIsChecking(false);
   }, [content]);
 
   return (
@@ -143,8 +168,8 @@ function MessageActions({
           >
             {selectedLanguage
               ? LANGUAGES.find(
-                  (language) => language.value === selectedLanguage
-                )?.label
+                (language) => language.value === selectedLanguage
+              )?.label
               : "Translate to..."}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
@@ -239,17 +264,15 @@ export default function Chat() {
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`flex flex-col ${
-                message.role === "user" ? "items-end" : "items-start"
-              }`}
+              className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"
+                }`}
             >
               <div className="flex items-start gap-2 max-w-[80%]">
                 <div
-                  className={`rounded-lg p-2 px-4 ${
-                    message.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
-                  }`}
+                  className={`rounded-lg p-2 px-4 ${message.role === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted"
+                    }`}
                 >
                   <p className="text-sm">{message.content}</p>
                 </div>
