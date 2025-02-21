@@ -248,8 +248,54 @@ export default function Chat() {
   };
 
   const handleSummarize = async (content: string) => {
-    const summary = mockResponses.summarize(content);
-    await simulateTyping(summary);
+    setIsTyping(true);
+    const summarizeText = async () => {
+      const options = {
+        sharedContext: 'This is a scientific article',
+        type: 'key-points',
+        format: 'markdown',
+        length: 'medium',
+      };
+
+      const available = (await self.ai.summarizer.capabilities()).available;
+      let summarizer;
+      if (available === 'no') {
+        // The Summarizer API isn't usable.
+        toast("The summarizer API isn't usable")
+        setIsTyping(false)
+        return;
+      }
+      if (available === 'readily') {
+        // The Summarizer API can be used immediately .
+        summarizer = await self.ai.summarizer.create(options);
+      } else {
+        try { // The Summarizer API can be used after the model is downloaded.
+          toast('Downloading summarizer')
+          summarizer = await self.ai.summarizer.create(options);
+          summarizer.addEventListener('downloadprogress', (e: { loaded: any; total: any; }) => {
+            console.log(e.loaded, e.total);
+          });
+          await summarizer.ready;
+        } catch (error) {
+          if (error instanceof Error) {
+            toast(`Error: ${error.message}`)
+          }
+        }
+      }
+
+      const summary = await summarizer.summarize(content);
+      setIsTyping(false);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          content: summary,
+          role: "assistant",
+        },
+      ]);
+    }
+
+    summarizeText()
   };
 
   const handleTranslate = async (content: string, language: string) => {
