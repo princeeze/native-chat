@@ -3,6 +3,16 @@
 import type React from "react";
 import { toast } from "sonner"
 
+declare global {
+  interface Window {
+    ai: {
+      languageDetector: any;
+      summarizer: any;
+      translator: any;
+    }
+  }
+}
+
 
 import { useState, useEffect } from "react";
 import { Send, Loader2, Check, ChevronsUpDown } from "lucide-react";
