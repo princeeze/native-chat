@@ -87,7 +87,7 @@ function MessageActions({
         }
         const results = await detector.detect(content);
         const languageResult = results[0].detectedLanguage
-        if (languageResult === "en") {
+        if (languageResult === "en" && content.length > 150) {
           setIsEnglish(true)
         }
       } catch (error) {
